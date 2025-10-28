@@ -12,7 +12,7 @@ Forward kinematics implementation from scratch for a 3R planar robot using Sympy
 - Computes end-effector position using homogeneous transforms  
 - Interactive visualisation
 
-<br><br>
+<br>
 <div align="center">
   <img src="assets/forward_kinematics_2d.gif" alt="Forward Kinematics Visualization" width="100%">
   <p><em>Adjust joint angles and link lengths using sliders</em></p>
