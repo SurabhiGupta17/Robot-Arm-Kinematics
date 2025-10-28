@@ -14,7 +14,7 @@ Forward kinematics implementation from scratch for a 3R planar robot using Sympy
 
 <br><br>
 <div align="center">
-  <img src="assets/forward_kinematics_2d.gif" alt="Forward Kinematics Visualization" width="70%">
+  <img src="assets/forward_kinematics_2d.gif" alt="Forward Kinematics Visualization" width="100%">
   <p><em>Adjust joint angles and link lengths using sliders</em></p>
 </div>
 
