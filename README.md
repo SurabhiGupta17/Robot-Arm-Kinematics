@@ -14,7 +14,7 @@ Forward kinematics implementation from scratch for a 3R planar robot using Sympy
 
 <br>
 <div align="center">
-  <img src="assets/forward_kinematics_2d.gif" alt="Forward Kinematics Visualization" width="95%">
+  <img src="assets/forward_kinematics_2d.gif" alt="Forward Kinematics Visualization" width="100%">
   <p><em>Adjust joint angles and link lengths using sliders</em></p>
 </div>
 
@@ -35,7 +35,7 @@ l₁·sin(θ₁) + l₂·sin(θ₁ + θ₂) = w_y
 
 <br>
 <div align="center">
-  <img src="assets/inverse_kinematics_2d.gif" alt="Inverse Kinematics Visualization" width="95%">
+  <img src="assets/inverse_kinematics_2d.gif" alt="Inverse Kinematics Visualization" width="100%">
   <p><em>Click to set IK target</em></p>
 </div>
 
