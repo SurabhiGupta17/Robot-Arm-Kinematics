@@ -1,46 +1,30 @@
-from sympy import Matrix, sin, cos, symbols, Eq, solve
-from math import degrees
-
+from math import atan2, cos, sin, sqrt, degrees, acos
+import numpy as np
 
 def compute_analytical_ik(target_x, target_y):
-    l1 = 3.0
-    l2 = 2.5
-    l3 = 1.5
-
-    theta1, theta2, theta3 = symbols('theta1 theta2 theta3', real=True)
-
-    H1 = Matrix([[cos(theta1), -sin(theta1), 0],
-                [sin(theta1), cos(theta1), 0],
-                [0, 0, 1]])
+    l1 = 4.0
+    l2 = 3.5
+    l3 = 2.5
     
-    H2 = Matrix([[cos(theta2), -sin(theta2), l1],
-                [sin(theta2), cos(theta2), 0],
-                [0, 0, 1]])
+    desired_ee_angle = atan2(target_y, target_x)
     
-    H3 = Matrix([[cos(theta3), -sin(theta3), l2],
-                [sin(theta3), cos(theta3), 0],
-                [0, 0, 1]])
+    wx = target_x - l3 * cos(desired_ee_angle)
+    wy = target_y - l3 * sin(desired_ee_angle)
+
+    dw = sqrt(wx**2 + wy**2)
     
-    H4 = Matrix([[1, 0, l3],
-                [0, 1, 0],
-                [0, 0, 1]])
+    if dw > (l1 + l2) or dw < abs(l1 - l2):
+        print(f"Unreachable! wrist distance={dw:.2f}, range=[{abs(l1-l2):.2f}, {l1+l2:.2f}]")
+        return None
     
-    H = H1*H2*H3*H4
+    cos_theta2 = (dw**2 - l1**2 - l2**2) / (2 * l1 * l2)
+    cos_theta2 = np.clip(cos_theta2, -1.0, 1.0)
+    theta2 = acos(cos_theta2)
     
-    p_e = Matrix([[0],
-                [0],
-                [1]])
+    alpha = atan2(wy, wx)
+    beta = atan2(l2 * sin(theta2), l1 + l2 * cos(theta2))
+    theta1 = alpha - beta
     
-    p_0 = H * p_e
-
-    target_phi = 0.0
-
-    eqs = [Eq(p_0[0], target_x), Eq(p_0[1], target_y), Eq(theta1 + theta2 + theta3, target_phi)]
-
-    solutions = solve(eqs, [theta1, theta2, theta3], dict=True)
-
-    theta1_val = degrees(float(solutions[0][theta1]))
-    theta2_val = degrees(float(solutions[0][theta2]))
-    theta3_val = degrees(float(solutions[0][theta3]))
-
-    return [theta1_val, theta2_val, theta3_val]
+    theta3 = desired_ee_angle - theta1 - theta2
+    
+    return [degrees(theta1), degrees(theta2), degrees(theta3)]

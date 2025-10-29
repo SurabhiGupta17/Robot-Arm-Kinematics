@@ -8,7 +8,7 @@ from robot_state import (
     get_parameters, set_parameters, set_target, get_target, set_mode, get_mode
 )
 
-INITIAL_L = [3.0, 2.5, 1.5]
+INITIAL_L = [4.0, 3.5, 2.5]
 INITIAL_THETA = [30.0, 45.0, 30.0]
 
 ee_text = None  
@@ -32,7 +32,7 @@ def _shortest_arc(start, end):
     delta = _normalize_angle(end - start)
     return start, start + delta
 
-def draw_angle_arc(ax, base, a_ref, a_link, radius, col, txt):
+def draw_angle_arc(ax, base, a_ref, a_link, radius, col, angle_val):
     start, end = _shortest_arc(a_ref, a_link)
     arc = np.linspace(start, end, 80)
     x = base[0] + radius * np.cos(arc)
@@ -55,7 +55,7 @@ def draw_angle_arc(ax, base, a_ref, a_link, radius, col, txt):
     if np.cos(mid) > 0.6: ha = 'left'
     if np.cos(mid) < -0.6: ha = 'right'
 
-    text = ax.text(lx, ly, txt, fontsize=12, color=col, fontweight='500',
+    text = ax.text(lx, ly, f"{angle_val:.1f}°", fontsize=11, color=col, fontweight='500',
                    ha=ha, va='center', clip_on=True)
     return line, text
 
@@ -134,7 +134,6 @@ def draw_robot():
     arc_lines = []
     arc_texts = []
     ref_lines = []
-    status_text = None
 
     def fk():
         th = np.radians(theta_deg)
@@ -150,7 +149,7 @@ def draw_robot():
 
     def update_plot():
         global ee_text, last_text_pos, target_marker, target_label
-        nonlocal ee_marker, status_text
+        nonlocal ee_marker
 
         for line in link_lines + arc_lines + ref_lines:
             safe_remove(line)
@@ -160,7 +159,6 @@ def draw_robot():
         safe_remove(ee_text)
         safe_remove(target_marker)
         safe_remove(target_label)
-        safe_remove(status_text)
 
         link_lines.clear()
         arc_lines.clear()
@@ -171,7 +169,6 @@ def draw_robot():
         ee_text = None
         target_marker = None
         target_label = None
-        status_text = None
 
         pts, prev_dirs, next_dirs = fk()
 
@@ -228,37 +225,26 @@ def draw_robot():
             target = get_target()
             if target is not None and target[0] is not None and target[1] is not None:
                 tx, ty = target
-                target_marker, = ax.plot([tx], [ty], 'x', color='#ff6b6b', markersize=15,
+                target_marker, = ax.plot([tx], [ty], 'x', color='#000000', markersize=15,
                                        markeredgewidth=3, zorder=6, clip_on=True)
                 target_label = ax.text(
                     tx + 0.3, ty + 0.3,
                     f"Target: ({tx:.2f}, {ty:.2f})",
-                    fontsize=10, color='#ff6b6b', fontweight='bold',
+                    fontsize=10, color='#000000', fontweight='bold',
                     ha='left', va='bottom', fontfamily='monospace',
-                    bbox=dict(facecolor='white', alpha=0.95, edgecolor='#ff6b6b', 
+                    bbox=dict(facecolor='white', alpha=0.95, edgecolor='#000000', 
                              pad=3, linewidth=1.5, boxstyle='round,pad=0.4'),
                     zorder=11, clip_on=True
                 )
-                
-                _, current_theta = get_parameters()
-                status_text = ax.text(
-                    0.02, 0.98,
-                    f"θ₁={current_theta[0]:.1f}°  θ₂={current_theta[1]:.1f}°  θ₃={current_theta[2]:.1f}°",
-                    transform=ax.transAxes,
-                    fontsize=11, color='#2c3e50', fontweight='500',
-                    ha='left', va='top', fontfamily='monospace',
-                    bbox=dict(facecolor='#e8f4f8', alpha=0.9, edgecolor='#3498db', 
-                             pad=5, linewidth=1.5, boxstyle='round,pad=0.5'),
-                    zorder=12
-                )
 
         arc_radii = [1.6, 1.4, 1.2]
+        _, current_theta = get_parameters()
         for j in range(3):
             base = pts[j]
             ref_line = draw_ref_extension(ax, base, prev_dirs[j], 2.2, '#95a5a6')
             link_line = draw_ref_extension(ax, base, next_dirs[j], 1.3, colors[j])
             arc_line, arc_text = draw_angle_arc(ax, base, prev_dirs[j], next_dirs[j],
-                                                arc_radii[j], colors[j], f"$\\theta_{{{j+1}}}$")
+                                                arc_radii[j], colors[j], current_theta[j])
             ref_lines.extend([ref_line, link_line])
             arc_lines.append(arc_line)
             arc_texts.append(arc_text)
@@ -272,7 +258,7 @@ def draw_robot():
 
     slider_width = 0.08
     slider_height = 0.015
-    start_x = 0.87
+    start_x = 0.865
     start_y = 0.82
 
     def destroy_sliders():
@@ -334,10 +320,10 @@ def draw_robot():
 
     total_slider_height = 6 * (slider_height + 0.02)
     mode_y = start_y - total_slider_height - 0.1
-    ax_mode = fig.add_axes([start_x, mode_y, slider_width, 0.08])
+    ax_mode = fig.add_axes([start_x - 0.015, mode_y, slider_width + 0.04, 0.08])
     radio = RadioButtons(ax_mode, ('Forward Kinematics', 'Inverse Kinematics'), active=0)
     for text in radio.labels:
-        text.set_fontsize(10)
+        text.set_fontsize(9)
 
     def on_mode_change(label):
         global animation_active, target_angles, current_angles
@@ -409,34 +395,23 @@ def draw_robot():
             return
         
         if animation_active:
-            print("Animation in progress, ignoring click")
             return
         
-        print(f"\n=== IK Click at ({event.xdata:.2f}, {event.ydata:.2f}) ===")
         set_target(event.xdata, event.ydata)
         update_plot()
         
         try:
             from kinematics.inverse_kinematics import compute_analytical_ik
-            print(f"Calling IK with target: ({event.xdata}, {event.ydata})")
             
             result = compute_analytical_ik(event.xdata, event.ydata)
             
-            print(f"IK returned: {result}")
-            print(f"Type: {type(result)}, Length: {len(result) if hasattr(result, '__len__') else 'N/A'}")
-            
             if isinstance(result, (list, tuple)) and len(result) == 3:
-                print(f"Starting animation to angles: {result}")
                 animate_to_ik_solution(result)
             else:
-                print(f"ERROR: Unexpected IK format: {result}")
                 update_plot()
         except Exception as e:
-            print(f"\n!!! IK FAILED !!!")
-            print(f"Error: {e}")
             import traceback
             traceback.print_exc()
-            print("=================\n")
             update_plot()
 
     fig.canvas.mpl_connect('button_press_event', on_click)
