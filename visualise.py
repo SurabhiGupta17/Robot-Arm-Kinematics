@@ -119,7 +119,7 @@ def draw_robot():
 
     ax.set_xlabel('X-axis (ground)', fontsize=12, fontweight='500', color='#2c3e50')
     ax.set_ylabel('Y-axis', fontsize=12, fontweight='500', color='#2c3e50')
-    ax.set_title('3R Planar Robot - Click to set IK target', fontsize=15, pad=20, 
+    ax.set_title('3R Planar Robot', fontsize=15, pad=20, 
                  fontweight='600', color='#2c3e50')
 
     ax.axhline(0, color='#34495e', lw=2, zorder=1)
