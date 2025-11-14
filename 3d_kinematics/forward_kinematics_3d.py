@@ -1,126 +1,74 @@
-"""
-Forward Kinematics for 3D Robot Arm
-
-This file implements forward kinematics using rotation matrices.
-The visualization script will import and use the compute_fk function from here.
-"""
-
 import numpy as np
+from sympy import Matrix, rad, cos, sin
 
-# UR5 link parameters - maintaining original working configuration
-# Link lengths and offsets
 LINK_LENGTHS = [
-    0.089159,   # Link 1 (base to joint 2) - vertical
-    0.2125,     # Link 2 (joint 2 to joint 3) - horizontal, reduced by half
-    0.196125,   # Link 3 (joint 3 to joint 4) - horizontal, reduced by half
-    0.10915,    # Link 4 (joint 4 to joint 5) - vertical
-    0.09465,    # Link 5 (joint 5 to joint 6) - vertical
-    0.0823      # Link 6 (joint 6 to end-effector) - vertical
+    0.089159, 
+    0.2125,  
+    0.196125,  
+    0.10915,
+    0.09465 
 ]
 
-def rotation_matrix_z(theta):
-    """Rotation matrix about z-axis."""
-    c = np.cos(theta)
-    s = np.sin(theta)
-    return np.array([
-        [c, -s, 0],
-        [s,  c, 0],
-        [0,  0, 1]
-    ])
-
-def rotation_matrix_y(theta):
-    """Rotation matrix about y-axis."""
-    c = np.cos(theta)
-    s = np.sin(theta)
-    return np.array([
-        [c,  0, s],
-        [0,  1, 0],
-        [-s, 0, c]
-    ])
-
 def compute_fk(joint_angles_deg):
-    """
-    Compute forward kinematics using rotation matrices.
-    Simple sequential approach like 2D script - maintains chain consistency.
-    """
-    # Convert to radians
-    theta = np.radians(joint_angles_deg)
+    theta1 = rad(joint_angles_deg[0])
+    theta2 = rad(joint_angles_deg[1])
+    theta3 = rad(joint_angles_deg[2])
+    theta4 = rad(joint_angles_deg[3])
+    theta5 = rad(joint_angles_deg[4])
+    theta6 = rad(joint_angles_deg[5])
+
+    l1 = LINK_LENGTHS[0]
+    l2 = LINK_LENGTHS[1]
+    l3 = LINK_LENGTHS[2]
+    l4 = LINK_LENGTHS[3]
+    l5 = LINK_LENGTHS[4]
+
+    H1 = Matrix([
+        [cos(theta1), -sin(theta1), 0, 0],
+        [sin(theta1), cos(theta1), 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]
+    ])
+
+    H2 = Matrix([
+        [cos(theta2), 0, sin(theta2), 0],
+        [0, 1, 0, 0],
+        [-sin(theta2), 0, cos(theta2), l1],
+        [0, 0, 0, 1]
+    ])
+
+    H3 = Matrix([
+        [cos(theta3), 0, sin(theta3), l2],
+        [0, 1, 0, 0],
+        [-sin(theta3), 0, cos(theta3), 0],
+        [0, 0, 0, 1]
+    ])
+
+    H4 = Matrix([
+        [cos(theta4), -sin(theta4), 0, l3],
+        [sin(theta4), cos(theta4), 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]
+    ])
     
-    # Initialize: base at origin
-    positions = [np.array([0.0, 0.0, 0.0])]
-    transforms = []
-    
-    # Base transform
-    T0 = np.eye(4)
-    transforms.append(T0.copy())
-    
-    # Current position and orientation
-    pos = np.array([0.0, 0.0, 0.0])
-    R = np.eye(3)  # Current rotation matrix
-    
-    # Joint 1: rotates about z-axis, then moves up by LINK_LENGTHS[0]
-    R1 = rotation_matrix_z(theta[0])
-    R = R @ R1
-    # Move up in z direction (in world frame after rotation)
-    pos = pos + R @ np.array([0.0, 0.0, LINK_LENGTHS[0]])
-    positions.append(pos.copy())
-    T = np.eye(4)
-    T[:3, :3] = R
-    T[:3, 3] = pos
-    transforms.append(T.copy())
-    
-    # Joint 2: rotates about y-axis (pitch down), then moves forward/back
-    R2 = rotation_matrix_y(theta[1])
-    R = R @ R2
-    # Move in x direction (forward/back after rotation)
-    pos = pos + R @ np.array([LINK_LENGTHS[1], 0.0, 0.0])
-    positions.append(pos.copy())
-    T = np.eye(4)
-    T[:3, :3] = R
-    T[:3, 3] = pos
-    transforms.append(T.copy())
-    
-    # Joint 3: rotates about y-axis (pitch), then moves forward/back
-    R3 = rotation_matrix_y(theta[2])
-    R = R @ R3
-    pos = pos + R @ np.array([LINK_LENGTHS[2], 0.0, 0.0])
-    positions.append(pos.copy())
-    T = np.eye(4)
-    T[:3, :3] = R
-    T[:3, 3] = pos
-    transforms.append(T.copy())
-    
-    # Joint 4: rotates about z-axis, then moves up
-    R4 = rotation_matrix_z(theta[3])
-    R = R @ R4
-    pos = pos + R @ np.array([0.0, 0.0, LINK_LENGTHS[3]])
-    positions.append(pos.copy())
-    T = np.eye(4)
-    T[:3, :3] = R
-    T[:3, 3] = pos
-    transforms.append(T.copy())
-    
-    # Joint 5: rotates about y-axis, then moves up
-    R5 = rotation_matrix_y(theta[4])
-    R = R @ R5
-    pos = pos + R @ np.array([0.0, 0.0, LINK_LENGTHS[4]])
-    positions.append(pos.copy())
-    T = np.eye(4)
-    T[:3, :3] = R
-    T[:3, 3] = pos
-    transforms.append(T.copy())
-    
-    # Joint 6: rotates about z-axis, then moves up
-    R6 = rotation_matrix_z(theta[5])
-    R = R @ R6
-    pos = pos + R @ np.array([0.0, 0.0, LINK_LENGTHS[5]])
-    positions.append(pos.copy())
-    T = np.eye(4)
-    T[:3, :3] = R
-    T[:3, 3] = pos
-    transforms.append(T.copy())
-    
-    # End-effector is at the last position
-    ee_position = positions[-1]
-    
-    return ee_position, positions, transforms
+    H5 = Matrix([
+        [cos(theta5), 0, sin(theta5), 0],
+        [0, 1, 0, 0],
+        [-sin(theta5), 0, cos(theta5), l4],
+        [0, 0, 0, 1]
+    ])
+
+    H6 = Matrix([
+        [cos(theta6), -sin(theta6), 0, 0],
+        [sin(theta6), cos(theta6), 0, 0],
+        [0, 0, 1, l5],
+        [0, 0, 0, 1]
+    ])
+
+    H = H1*H2*H3*H4*H5*H6
+
+    x = float(H[0, 3])
+    y = float(H[1, 3])
+    z = float(H[2, 3])
+
+    return x, y, z

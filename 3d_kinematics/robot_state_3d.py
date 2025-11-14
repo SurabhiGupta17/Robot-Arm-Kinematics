@@ -9,11 +9,9 @@ class Mode(Enum):
     MANUAL = "Manual"
     IK = "IK"
 
-# UR5-like robot: 6 revolute joints
-# Joint angles in degrees - UR5 home position
-theta_deg = [0.0, -90.0, 0.0, 0.0, 0.0, 0.0]  # Initial joint angles (UR5 home)
-target_xyz = None              # IK target (x, y, z)
-mode = Mode.MANUAL            # Current mode
+theta_deg = [-39.0, -84.0, -44.0, -34.0, -29.0, 0.0]  
+target_xyz = None            
+mode = Mode.MANUAL            
 
 def get_parameters():
     """Return copies to prevent mutation."""
@@ -25,7 +23,6 @@ def set_parameters(new_theta):
 
 def set_target(x, y, z):
     global target_xyz
-    # Ensure all values are not None
     if x is None or y is None or z is None:
         return
     target_xyz = (float(x), float(y), float(z))

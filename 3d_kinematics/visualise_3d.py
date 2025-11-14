@@ -10,9 +10,139 @@ from robot_state_3d import (
 
 # Forward kinematics - import from user's implementation
 # This maintains chain consistency like the 2D script
+from forward_kinematics_3d import LINK_LENGTHS
 
-# UR5 home position (initial pose)
-INITIAL_THETA = [0.0, -90.0, 0.0, 0.0, 0.0, 0.0]
+INITIAL_THETA = [-39.0, -84.0, -44.0, -34.0, -29.0, 0.0]
+
+# Rotation matrix helper functions for visualization
+def rotation_matrix_z(theta):
+    """Rotation matrix about z-axis."""
+    c = np.cos(theta)
+    s = np.sin(theta)
+    return np.array([
+        [c, -s, 0],
+        [s,  c, 0],
+        [0,  0, 1]
+    ])
+
+def rotation_matrix_y(theta):
+    """Rotation matrix about y-axis."""
+    c = np.cos(theta)
+    s = np.sin(theta)
+    return np.array([
+        [c,  0, s],
+        [0,  1, 0],
+        [-s, 0, c]
+    ])
+
+def compute_fk_full(joint_angles_deg):
+    """
+    Compute forward kinematics with full details for visualization.
+    Returns end-effector position, all joint positions, and transforms.
+    This uses the same FK logic as the user's compute_fk function.
+    
+    Args:
+        joint_angles_deg: List of 6 joint angles in degrees
+    
+    Returns:
+        tuple: (ee_position, positions, transforms)
+            - ee_position: End-effector position (x, y, z)
+            - positions: List of all joint positions
+            - transforms: List of all transformation matrices
+    """
+    from sympy import Matrix, rad, cos, sin
+    
+    theta1 = rad(joint_angles_deg[0])
+    theta2 = rad(joint_angles_deg[1])
+    theta3 = rad(joint_angles_deg[2])
+    theta4 = rad(joint_angles_deg[3])
+    theta5 = rad(joint_angles_deg[4])
+    theta6 = rad(joint_angles_deg[5])
+
+    l1 = LINK_LENGTHS[0]
+    l2 = LINK_LENGTHS[1]
+    l3 = LINK_LENGTHS[2]
+    l4 = LINK_LENGTHS[3]
+    l5 = LINK_LENGTHS[4]
+
+    # Build transformation matrices (same as user's compute_fk)
+    H1 = Matrix([
+        [cos(theta1), -sin(theta1), 0, 0],
+        [sin(theta1), cos(theta1), 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]
+    ])
+
+    H2 = Matrix([
+        [cos(theta2), 0, sin(theta2), 0],
+        [0, 1, 0, 0],
+        [-sin(theta2), 0, cos(theta2), l1],
+        [0, 0, 0, 1]
+    ])
+
+    H3 = Matrix([
+        [cos(theta3), 0, sin(theta3), l2],
+        [0, 1, 0, 0],
+        [-sin(theta3), 0, cos(theta3), 0],
+        [0, 0, 0, 1]
+    ])
+
+    H4 = Matrix([
+        [cos(theta4), -sin(theta4), 0, l3],
+        [sin(theta4), cos(theta4), 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]
+    ])
+    
+    H5 = Matrix([
+        [cos(theta5), 0, sin(theta5), 0],
+        [0, 1, 0, 0],
+        [-sin(theta5), 0, cos(theta5), l4],
+        [0, 0, 0, 1]
+    ])
+
+    H6 = Matrix([
+        [cos(theta6), -sin(theta6), 0, 0],
+        [sin(theta6), cos(theta6), 0, 0],
+        [0, 0, 1, l5],
+        [0, 0, 0, 1]
+    ])
+
+    # Compute intermediate transforms to get joint positions
+    # Each transform represents the cumulative transformation from base to that joint
+    T1 = H1
+    T2 = H1 * H2
+    T3 = H1 * H2 * H3
+    T4 = H1 * H2 * H3 * H4
+    T5 = H1 * H2 * H3 * H4 * H5
+    T6 = H1 * H2 * H3 * H4 * H5 * H6  # End-effector
+    
+    # Extract positions from transformation matrices
+    positions = []
+    transforms = []
+    
+    # Base position and transform
+    base_pos = np.array([0.0, 0.0, 0.0])
+    positions.append(base_pos)
+    transforms.append(np.eye(4))
+    
+    # Convert sympy matrices to numpy and extract positions for each joint
+    # Structure: base, joint1, joint2, joint3, joint4, joint5, joint6 (end-effector) = 7 positions
+    # Transforms: base, T1, T2, T3, T4, T5, T6 = 7 transforms (one per position)
+    transforms_list = [T1, T2, T3, T4, T5, T6]
+    for T in transforms_list:
+        # Convert sympy Matrix to numpy array
+        T_np = np.array(T.tolist()).astype(float)
+        transforms.append(T_np)
+        
+        # Extract position (translation part) - this is the joint position in world frame
+        pos = np.array([float(T_np[0, 3]), float(T_np[1, 3]), float(T_np[2, 3])])
+        positions.append(pos)
+    
+    # End-effector is at joint 6 position (last position)
+    ee_position = positions[-1]
+    
+    return ee_position, positions, transforms
 
 ee_text = None  
 target_marker = None
@@ -409,25 +539,36 @@ def draw_robot():
 
         # Compute forward kinematics (like 2D script - maintains chain consistency)
         current_theta = get_parameters()
-        from forward_kinematics_3d import compute_fk
-        ee_position, joint_positions, transforms = compute_fk(current_theta)
+        ee_position, joint_positions, transforms = compute_fk_full(current_theta)
         
         # Draw links as cylinders (with original colors and adjustable opacity)
-        # Adjust radius per link: Link 1 bigger, Links 2-3 smaller, Links 4-6 medium
+        # Adjust radius per link: Link 1 bigger, Links 2-3 smaller, Links 4-5 medium
         base_radius = 0.015  # Base radius
-        radius_multipliers = [1.5, 0.7, 0.7, 1.0, 1.0, 1.0]  # Link 1 bigger, 2-3 smaller
+        radius_multipliers = [1.5, 0.7, 0.7, 1.0, 1.0]  # Link 1 bigger, 2-3 smaller, 4-5 medium
         
         # NO visual extensions - keep consistent chain, links connect properly at joints
+        # We have 5 actual links (Link 1 to Link 5), but positions include base and all joints
+        # Track which actual link we're on (skipping zero-length links)
+        actual_link_idx = 0
         for i in range(len(joint_positions) - 1):
             p1 = joint_positions[i]
             p2 = joint_positions[i + 1]
             
+            # Skip if positions are the same (zero-length link, e.g., base to joint 1)
+            if np.allclose(p1, p2):
+                continue
+            
             # Draw cylinder exactly from joint to joint (no extensions)
-            cylinder_radius = base_radius * radius_multipliers[i]
+            # Use actual_link_idx to index into radius_multipliers (for the 5 actual links)
+            multiplier_idx = min(actual_link_idx, len(radius_multipliers) - 1)
+            cylinder_radius = base_radius * radius_multipliers[multiplier_idx]
+            color_idx = actual_link_idx % len(colors)
             cyl_surfaces = draw_cylinder(ax, p1, p2, radius=cylinder_radius, 
-                                        color=colors[i % len(colors)], alpha=link_opacity)
+                                        color=colors[color_idx], alpha=link_opacity)
             if cyl_surfaces:
                 link_cylinders.append(cyl_surfaces)
+            
+            actual_link_idx += 1
         
         # Draw coordinate axes at each joint and end-effector (RGB: X=red, Y=green, Z=blue)
         # Show axes at base, joint 3, joint 4, joint 5, and end-effector
@@ -492,9 +633,10 @@ def draw_robot():
         # Show end-effector position in MANUAL mode (near the actual end-effector, like 2D)
         # EE coordinates come from forward kinematics (same as 2D: compute_fk(get_parameters()))
         if get_mode() == Mode.MANUAL:
-            # EE position already computed from forward kinematics above (line 400)
-            # Same structure as 2D: x, y = compute_fk(get_parameters())
-            x, y, z = ee_position
+            # Use the user's compute_fk function to get the actual end-effector coordinates
+            # This ensures the displayed coordinates match what the user's FK implementation returns
+            from forward_kinematics_3d import compute_fk
+            x, y, z = compute_fk(current_theta)
             
             # Find a good position for the text label near the end-effector
             # Use the direction from the second-to-last joint to end-effector
@@ -557,8 +699,8 @@ def draw_robot():
             # Create custom legend entries for links
             from matplotlib.lines import Line2D
             legend_elements = []
-            # Add link entries
-            link_names = ['Link 1', 'Link 2', 'Link 3', 'Link 4', 'Link 5', 'Link 6']
+            # Add link entries (5 links: Link 1 to Link 5, end-effector is at Joint 6)
+            link_names = ['Link 1', 'Link 2', 'Link 3', 'Link 4', 'Link 5']
             for i, (name, color) in enumerate(zip(link_names, colors)):
                 legend_elements.append(Line2D([0], [0], color=color, lw=3, label=name))
             # Add other elements
@@ -840,8 +982,8 @@ def draw_robot():
         # Get current end-effector position for z reference
         current_theta = get_parameters()
         from forward_kinematics_3d import compute_fk
-        ee_pos, _, _ = compute_fk(current_theta)
-        reference_z = float(ee_pos[2]) if ee_pos[2] is not None else 0.5
+        ee_x, ee_y, ee_z = compute_fk(current_theta)
+        reference_z = float(ee_z) if ee_z is not None else 0.5
         
         # Get axis limits
         xlim = ax.get_xlim()
@@ -958,9 +1100,8 @@ def draw_robot():
     fig.canvas.mpl_connect('button_press_event', on_click)
     fig.canvas.mpl_connect('key_press_event', on_key_press)
     
-    # Set window title
     try:
-        fig.canvas.manager.set_window_title('6 DOF UR5-like Robot Kinematics')
+        fig.canvas.manager.set_window_title('6 DOF Robot Kinematics')
     except:
         pass
 
