@@ -43,3 +43,21 @@ l₁·sin(θ₁) + l₂·sin(θ₁ + θ₂) = w_y
 ```bash
 python3 main.py
 ```
+
+<br>
+
+## 6-DOF Robot Arm : Forward Kinematics (3D)
+
+Forward kinematics implementation for a 6-DOF serial manipulator (UR5-type configuration) using homogeneous transformation matrices.
+
+### Features
+- Computes end-effector pose using 3D homogeneous transforms
+- Real-time joint control via sliders
+
+<br>
+<div align="center">
+  <img src="assets/forward_kinematics_3d.gif" alt="3D Forward Kinematics Visualization" width="100%">
+  <p><em>Adjust joint angles to visualize 6-DOF robot configuration</em></p>
+</div>
+
+<br>
