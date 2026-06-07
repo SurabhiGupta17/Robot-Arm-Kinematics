@@ -87,6 +87,8 @@ def compute_fk_full(joint_angles_deg):
         [0, 0, 0, 1]
     ])
 
+    # UR-style spherical wrist: joints 4, 5, 6 axes intersect at wrist center
+    # H4: Translate to wrist center (l3), then rotate about Z
     H4 = Matrix([
         [cos(theta4), -sin(theta4), 0, l3],
         [sin(theta4), cos(theta4), 0, 0],
@@ -94,17 +96,28 @@ def compute_fk_full(joint_angles_deg):
         [0, 0, 0, 1]
     ])
     
+    # H5: Rotate about Y at wrist center (no translation - axes intersect here)
     H5 = Matrix([
         [cos(theta5), 0, sin(theta5), 0],
         [0, 1, 0, 0],
-        [-sin(theta5), 0, cos(theta5), l4],
+        [-sin(theta5), 0, cos(theta5), 0],
         [0, 0, 0, 1]
     ])
 
+    # H6: Rotate about Z at wrist center (no translation - axes intersect here)
     H6 = Matrix([
         [cos(theta6), -sin(theta6), 0, 0],
         [sin(theta6), cos(theta6), 0, 0],
-        [0, 0, 1, l5],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]
+    ])
+    
+    # End-effector offset: translate from wrist center to end-effector
+    # Total offset = l4 + l5 along the Z axis of the wrist frame
+    H_ee = Matrix([
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, l4 + l5],
         [0, 0, 0, 1]
     ])
 
@@ -113,9 +126,9 @@ def compute_fk_full(joint_angles_deg):
     T1 = H1
     T2 = H1 * H2
     T3 = H1 * H2 * H3
-    T4 = H1 * H2 * H3 * H4
-    T5 = H1 * H2 * H3 * H4 * H5
-    T6 = H1 * H2 * H3 * H4 * H5 * H6  # End-effector
+    T4 = H1 * H2 * H3 * H4  # Wrist center (where joints 4, 5, 6 axes intersect)
+    T5 = H1 * H2 * H3 * H4 * H5  # Still at wrist center (H5 only rotates)
+    T6 = H1 * H2 * H3 * H4 * H5 * H6 * H_ee  # End-effector (after wrist rotations + offset)
     
     # Extract positions from transformation matrices
     positions = []
@@ -147,6 +160,7 @@ def compute_fk_full(joint_angles_deg):
 ee_text = None  
 target_marker = None
 target_label = None
+# Only numerical IK is used now
 sliders = [] 
 
 animation_active = False
@@ -842,8 +856,10 @@ def draw_robot():
     for text in radio.labels:
         text.set_fontsize(9)
     
+    # IK method selection removed - only numerical IK is used
+    
     # Add reset buttons (with spacing)
-    button_y = mode_y - 0.12
+    button_y = mode_y - 0.10
     button_height = 0.04
     button_width = slider_width + 0.04
     
@@ -930,7 +946,7 @@ def draw_robot():
         target_label = None
 
         update_plot()
-
+    
     radio.on_clicked(on_mode_change)
 
     # Animation function removed - user will implement their own IK and animation if needed
@@ -951,6 +967,7 @@ def draw_robot():
             current_angles = None
             animation_progress = 0
             update_plot()
+            print("Animation completed!")
         else:
             t = animation_progress
             t = t * t * (3 - 2 * t)  # Smooth step interpolation
@@ -963,7 +980,7 @@ def draw_robot():
             update_plot()
 
     def on_click(event):
-        global animation_active
+        global animation_active, target_angles, current_angles, animation_progress
         
         if get_mode() != Mode.IK or event.inaxes != ax:
             return
@@ -1003,9 +1020,9 @@ def draw_robot():
         min_dist = float('inf')
         
         # First, search in x-y plane at the reference z (much faster - 2D search)
-        # Use a reasonable grid size for speed
-        x_samples = np.linspace(xlim[0], xlim[1], 30)
-        y_samples = np.linspace(ylim[0], ylim[1], 30)
+        # Use a smaller grid size for faster response
+        x_samples = np.linspace(xlim[0], xlim[1], 15)
+        y_samples = np.linspace(ylim[0], ylim[1], 15)
         
         for x_test in x_samples:
             for y_test in y_samples:
@@ -1050,9 +1067,34 @@ def draw_robot():
             # Set the target
             set_target(click_x, click_y, click_z)
             update_plot()
+            
+            # Solve IK and animate to solution
+            try:
+                from inverse_kinematics_3d import compute_numerical_ik
+                
+                print(f"Solving IK for target: ({click_x:.3f}, {click_y:.3f}, {click_z:.3f})...")
+                result = compute_numerical_ik(click_x, click_y, click_z, 
+                                              initial_angles_deg=get_parameters())
+                
+                if result is not None and len(result) == 6:
+                    print(f"IK solution found: {[round(r, 2) for r in result]}")
+                    # Animate to IK solution
+                    current_angles = get_parameters().copy()
+                    target_angles = result
+                    animation_progress = 0.0
+                    animation_active = True
+                    print(f"Animation started. Current: {current_angles}, Target: {target_angles}")
+                else:
+                    print(f"IK failed: {result}")
+            except Exception as e:
+                import traceback
+                print(f"Error solving IK: {e}")
+                traceback.print_exc()
 
     def on_key_press(event):
         """Handle keyboard input for setting target in IK mode."""
+        global animation_active, target_angles, current_angles, animation_progress
+        
         if get_mode() != Mode.IK:
             return
         
@@ -1092,10 +1134,32 @@ def draw_robot():
         target[1] = np.clip(target[1], -0.8, 0.8)
         target[2] = np.clip(target[2], 0.1, 1.1)
         
-        # Just set the target visually - no IK solving here
-        # User will implement their own IK and call it separately
+        # Set the target and solve IK
         set_target(target[0], target[1], target[2])
         update_plot()
+        
+        # Solve IK and animate to solution
+        try:
+            from inverse_kinematics_3d import compute_numerical_ik
+            
+            print(f"Solving IK for target: ({target[0]:.3f}, {target[1]:.3f}, {target[2]:.3f})...")
+            result = compute_numerical_ik(target[0], target[1], target[2], 
+                                          initial_angles_deg=get_parameters())
+            
+            if result is not None and len(result) == 6:
+                print(f"IK solution found: {[round(r, 2) for r in result]}")
+                # Animate to IK solution
+                current_angles = get_parameters().copy()
+                target_angles = result
+                animation_progress = 0.0
+                animation_active = True
+                print(f"Animation started. Current: {current_angles}, Target: {target_angles}")
+            else:
+                print(f"IK failed: {result}")
+        except Exception as e:
+            import traceback
+            print(f"Error solving IK: {e}")
+            traceback.print_exc()
 
     fig.canvas.mpl_connect('button_press_event', on_click)
     fig.canvas.mpl_connect('key_press_event', on_key_press)

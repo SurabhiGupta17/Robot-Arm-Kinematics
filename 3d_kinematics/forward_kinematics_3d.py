@@ -54,18 +54,25 @@ def compute_fk(joint_angles_deg):
     H5 = Matrix([
         [cos(theta5), 0, sin(theta5), 0],
         [0, 1, 0, 0],
-        [-sin(theta5), 0, cos(theta5), l4],
+        [-sin(theta5), 0, cos(theta5), 0],
         [0, 0, 0, 1]
     ])
 
     H6 = Matrix([
         [cos(theta6), -sin(theta6), 0, 0],
         [sin(theta6), cos(theta6), 0, 0],
-        [0, 0, 1, l5],
+        [0, 0, 1, 0],
+        [0, 0, 0, 1]
+    ])
+    
+    H_ee = Matrix([
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, l4 + l5],
         [0, 0, 0, 1]
     ])
 
-    H = H1*H2*H3*H4*H5*H6
+    H = H1*H2*H3*H4*H5*H6*H_ee
 
     x = float(H[0, 3])
     y = float(H[1, 3])
